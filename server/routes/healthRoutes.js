@@ -9,6 +9,7 @@ const router = express.Router();
 router.get("/", (req, res) => {
   res.status(200).json({
     status: "ok",
+    appName: process.env.APP_NAME,
     message: "CollaborativeFlow AI server is running",
     timestamp: new Date().toISOString(), // ISO format: "2024-01-15T10:30:00.000Z"
     environment: process.env.NODE_ENV, // "development" or "production" from env
