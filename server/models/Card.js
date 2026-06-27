@@ -68,9 +68,8 @@ const cardSchema = new mongoose.Schema(
     // Used for deduplication — prevents importing the same issue twice.
     githubIssueId: {
       type: Number,
-      default: null,
-      unique: true,
       sparse: true,
+      unique: true,
     },
   },
   {
