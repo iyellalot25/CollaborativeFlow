@@ -227,6 +227,13 @@ const createColumn = async (req, res) => {
       order: columnCount, // append to the end
     });
 
+    // SOCKET EMIT
+    // Notify all browsers viewing this board that a new column appeared.
+    const io = req.app.get("io");
+    io.to(boardId).emit("column:created", {
+      column: { ...column.toObject(), cards: [] },
+    });
+
     res.status(201).json({
       success: true,
       data: column,

@@ -1,5 +1,4 @@
 // Handles all card-level operations.
-
 const Card = require("../models/Card");
 const Column = require("../models/Column");
 const Board = require("../models/Board");
@@ -55,7 +54,14 @@ const createCard = async (req, res) => {
       priority: priority || "medium",
       assignee: assignee ? assignee.trim() : "",
       labels: Array.isArray(labels) ? labels : [],
-      order: cardCount, // append to bottom of column
+      order: cardCount,
+    });
+
+    // SOCKET EMIT
+    const io = req.app.get("io");
+    io.to(boardId).emit("card:created", {
+      columnId, // frontend needs this to know which column to update
+      card, // the full card document, same shape the REST response returns
     });
 
     res.status(201).json({
@@ -64,23 +70,18 @@ const createCard = async (req, res) => {
     });
   } catch (error) {
     if (error.name === "CastError") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid ID format",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid ID format" });
     }
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors).map((e) => e.message);
-      return res.status(400).json({
-        success: false,
-        message: messages.join(", "),
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: messages.join(", ") });
     }
     console.error("createCard error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to create card",
-    });
+    res.status(500).json({ success: false, message: "Failed to create card" });
   }
 };
 
@@ -116,10 +117,9 @@ const updateCard = async (req, res) => {
     if (updates.assignee) updates.assignee = updates.assignee.trim();
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid fields to update",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "No valid fields to update" });
     }
 
     // findByIdAndUpdate options:
@@ -132,35 +132,34 @@ const updateCard = async (req, res) => {
     );
 
     if (!card) {
-      return res.status(404).json({
-        success: false,
-        message: "Card not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Card not found" });
     }
 
-    res.status(200).json({
-      success: true,
-      data: card,
+    // SOCKET EMIT
+
+    const io = req.app.get("io");
+    io.to(card.boardId.toString()).emit("card:updated", {
+      columnId: card.columnId, // frontend needs this to locate the card
+      card, // the full updated card document
     });
+
+    res.status(200).json({ success: true, data: card });
   } catch (error) {
     if (error.name === "CastError") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid card ID format",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid card ID format" });
     }
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors).map((e) => e.message);
-      return res.status(400).json({
-        success: false,
-        message: messages.join(", "),
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: messages.join(", ") });
     }
     console.error("updateCard error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to update card",
-    });
+    res.status(500).json({ success: false, message: "Failed to update card" });
   }
 };
 
@@ -172,37 +171,40 @@ const deleteCard = async (req, res) => {
   try {
     const { cardId } = req.params;
 
+    // findByIdAndDelete returns the deleted document
     const card = await Card.findByIdAndDelete(cardId);
 
     if (!card) {
-      return res.status(404).json({
-        success: false,
-        message: "Card not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Card not found" });
     }
 
-    res.status(200).json({
-      success: true,
-      message: "Card deleted",
+    // SOCKET EMIT
+    // We emit AFTER deletion but use the returned card document
+    // to get boardId and columnId. The document is gone from the DB
+    // but we still have it as a JavaScript object in memory.
+    const io = req.app.get("io");
+    io.to(card.boardId.toString()).emit("card:deleted", {
+      columnId: card.columnId, // which column to remove the card from
+      cardId: card._id, // which specific card to remove
     });
+
+    res.status(200).json({ success: true, message: "Card deleted" });
   } catch (error) {
     if (error.name === "CastError") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid card ID format",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid card ID format" });
     }
     console.error("deleteCard error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to delete card",
-    });
+    res.status(500).json({ success: false, message: "Failed to delete card" });
   }
 };
 
 /**
  * PATCH /api/cards/:cardId/move
- * Moves a card to a different column (or repositions it within the same column).
+ * Moves a card to a different column.
  * Body: { targetColumnId: string, newOrder: number }
  */
 const moveCard = async (req, res) => {
@@ -211,26 +213,22 @@ const moveCard = async (req, res) => {
     const { targetColumnId, newOrder } = req.body;
 
     if (!targetColumnId) {
-      return res.status(400).json({
-        success: false,
-        message: "targetColumnId is required",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "targetColumnId is required" });
     }
-
     if (newOrder === undefined || newOrder === null) {
-      return res.status(400).json({
-        success: false,
-        message: "newOrder is required",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "newOrder is required" });
     }
 
     // Verify the card exists
     const card = await Card.findById(cardId);
     if (!card) {
-      return res.status(404).json({
-        success: false,
-        message: "Card not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Card not found" });
     }
 
     // Verify the target column exists and belongs to the same board
@@ -245,7 +243,9 @@ const moveCard = async (req, res) => {
       });
     }
 
-    // Update the card's column and order
+    // Capture the source columnId before we overwrite it.
+    const sourceColumnId = card.columnId;
+
     card.columnId = targetColumnId;
     card.order = newOrder;
     await card.save();
@@ -270,28 +270,26 @@ const moveCard = async (req, res) => {
     // Return the updated card with its final normalized order
     const updatedCard = await Card.findById(cardId);
 
-    res.status(200).json({
-      success: true,
-      data: updatedCard,
+    // SOCKET EMIT
+
+    const io = req.app.get("io");
+    io.to(card.boardId.toString()).emit("card:moved", {
+      cardId: updatedCard._id,
+      sourceColumnId, // remove from here
+      targetColumnId, // add to here
+      card: updatedCard, // full card with new order value
     });
+
+    res.status(200).json({ success: true, data: updatedCard });
   } catch (error) {
     if (error.name === "CastError") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid ID format",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid ID format" });
     }
     console.error("moveCard error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to move card",
-    });
+    res.status(500).json({ success: false, message: "Failed to move card" });
   }
 };
 
-module.exports = {
-  createCard,
-  updateCard,
-  deleteCard,
-  moveCard,
-};
+module.exports = { createCard, updateCard, deleteCard, moveCard };
