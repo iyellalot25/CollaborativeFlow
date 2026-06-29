@@ -70,22 +70,28 @@ const BoardPage = () => {
 
   const handleCardCreated = (columnId, newCard) => {
     setColumns((prev) =>
-      prev.map((col) =>
-        col._id === columnId.toString()
-          ? {
-              ...col,
-              cards: [
-                ...col.cards,
-                {
-                  ...newCard,
-                  _id: newCard._id.toString(),
-                  columnId: newCard.columnId.toString(),
-                  boardId: newCard.boardId.toString(),
-                },
-              ],
-            }
-          : col,
-      ),
+      prev.map((col) => {
+        if (col._id !== columnId.toString()) return col;
+
+        // Check before adding to prevent duplicates.
+        const alreadyExists = col.cards.some(
+          (c) => c._id === newCard._id.toString(),
+        );
+        if (alreadyExists) return col;
+
+        return {
+          ...col,
+          cards: [
+            ...col.cards,
+            {
+              ...newCard,
+              _id: newCard._id.toString(),
+              columnId: newCard.columnId.toString(),
+              boardId: newCard.boardId.toString(),
+            },
+          ],
+        };
+      }),
     );
   };
 
@@ -159,21 +165,13 @@ const BoardPage = () => {
     // Deduplication: if the card already exists in state, we created it
     // ourselves via the REST response. Skip to avoid duplicates.
     const handleCardCreatedEvent = ({ columnId, card }) => {
-      setColumns((prev) => {
-        const col = prev.find((c) => c._id === columnId.toString());
-        if (!col) return prev;
-
-        const alreadyExists = col.cards.some(
-          (c) => c._id === card._id.toString(),
-        );
-        if (alreadyExists) return prev;
-
-        return prev.map((c) =>
-          c._id === columnId.toString()
+      setColumns((prev) =>
+        prev.map((col) =>
+          col._id === columnId.toString()
             ? {
-                ...c,
+                ...col,
                 cards: [
-                  ...c.cards,
+                  ...col.cards,
                   {
                     ...card,
                     _id: card._id.toString(),
@@ -182,9 +180,9 @@ const BoardPage = () => {
                   },
                 ],
               }
-            : c,
-        );
-      });
+            : col,
+        ),
+      );
     };
 
     // card:updated
