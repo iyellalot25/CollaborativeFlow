@@ -72,7 +72,6 @@ const KanbanBoard = ({
 
   const handleDragEnd = async (event) => {
     const { active, over } = event;
-
     setActiveCard(null);
 
     if (!over) {
@@ -88,8 +87,6 @@ const KanbanBoard = ({
     const overId = over.id;
     const sourceColumn = source.column;
 
-    // overId is either a card ID (dropped on a card)
-    // or a column ID (dropped on an empty column via useDroppable)
     let targetColumn = findColumnByCardId(overId);
     if (!targetColumn) {
       targetColumn = columns.find(
@@ -98,33 +95,28 @@ const KanbanBoard = ({
     }
     if (!targetColumn) return;
 
-    // Dropped card onto itself in same position — nothing to do
-    if (
-      sourceColumn._id.toString() === targetColumn._id.toString() &&
-      activeCardId.toString() === overId.toString()
-    )
-      return;
-
-    // Calculate insertion index in target column
+    // 1. Calculate the exact targeted array index
     const targetCards = targetColumn.cards;
     const overCardIndex = targetCards.findIndex(
       (c) => c._id.toString() === overId.toString(),
     );
-    const newOrder = overCardIndex >= 0 ? overCardIndex : targetCards.length;
 
-    // Build the moved card from the ref-captured source card
+    // If dropped directly over a column container rather than a card, append to the end
+    const targetIndex = overCardIndex >= 0 ? overCardIndex : targetCards.length;
+
+    // 2. Build the moved card configuration payload
     const movedCard = {
       ...source.card,
       columnId: targetColumn._id,
-      order: newOrder,
+      order: targetIndex,
     };
 
-    // Optimistic update — move card in UI before server confirms
-    onCardMoved(sourceColumn._id, targetColumn._id, movedCard);
+    // 3. Fire optimistic UI update (now passing targetIndex as a 4th argument)
+    onCardMoved(sourceColumn._id, targetColumn._id, movedCard, targetIndex);
 
-    // Persist to database
+    // 4. Persist change to database (Runs for BOTH same-column and cross-column drops now)
     try {
-      await cardService.moveCard(activeCardId, targetColumn._id, newOrder);
+      await cardService.moveCard(activeCardId, targetColumn._id, targetIndex);
     } catch (err) {
       console.error("Failed to persist card move:", err);
     }

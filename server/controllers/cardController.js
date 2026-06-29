@@ -171,23 +171,26 @@ const deleteCard = async (req, res) => {
   try {
     const { cardId } = req.params;
 
-    // findByIdAndDelete returns the deleted document
     const card = await Card.findByIdAndDelete(cardId);
-
     if (!card) {
       return res
         .status(404)
         .json({ success: false, message: "Card not found" });
     }
 
+    // Reorder gap closure: Pull cards below the deleted item up by 1
+    await Card.updateMany(
+      { columnId: card.columnId, order: { $gt: card.order } },
+      { $inc: { order: -1 } },
+    );
     // SOCKET EMIT
     // We emit AFTER deletion but use the returned card document
     // to get boardId and columnId. The document is gone from the DB
     // but we still have it as a JavaScript object in memory.
     const io = req.app.get("io");
     io.to(card.boardId.toString()).emit("card:deleted", {
-      columnId: card.columnId, // which column to remove the card from
-      cardId: card._id, // which specific card to remove
+      columnId: card.columnId,
+      cardId: card._id,
     });
 
     res.status(200).json({ success: true, message: "Card deleted" });
@@ -204,7 +207,7 @@ const deleteCard = async (req, res) => {
 
 /**
  * PATCH /api/cards/:cardId/move
- * Moves a card to a different column.
+ * Moves a card within the same column or to a different column.
  * Body: { targetColumnId: string, newOrder: number }
  */
 const moveCard = async (req, res) => {
@@ -223,7 +226,6 @@ const moveCard = async (req, res) => {
         .json({ success: false, message: "newOrder is required" });
     }
 
-    // Verify the card exists
     const card = await Card.findById(cardId);
     if (!card) {
       return res
@@ -231,7 +233,6 @@ const moveCard = async (req, res) => {
         .json({ success: false, message: "Card not found" });
     }
 
-    // Verify the target column exists and belongs to the same board
     const targetColumn = await Column.findOne({
       _id: targetColumnId,
       boardId: card.boardId,
@@ -243,44 +244,67 @@ const moveCard = async (req, res) => {
       });
     }
 
-    // Capture the source columnId before we overwrite it.
-    const sourceColumnId = card.columnId;
+    const sourceColumnId = card.columnId.toString();
+    const destinationColumnId = targetColumnId.toString();
+    const currentOrder = card.order;
 
-    card.columnId = targetColumnId;
-    card.order = newOrder;
-    await card.save();
+    // CASE 1: Reordering within the EXACT SAME column
+    if (sourceColumnId === destinationColumnId) {
+      if (currentOrder < newOrder) {
+        // Dragged downwards: Shift intermediate cards UP
+        await Card.updateMany(
+          {
+            columnId: sourceColumnId,
+            order: { $gt: currentOrder, $lte: newOrder },
+          },
+          { $inc: { order: -1 } },
+        );
+      } else if (currentOrder > newOrder) {
+        // Dragged upwards: Shift intermediate cards DOWN
+        await Card.updateMany(
+          {
+            columnId: sourceColumnId,
+            order: { $gte: newOrder, $lt: currentOrder },
+          },
+          { $inc: { order: 1 } },
+        );
+      }
 
-    // Re-fetch all cards in the destination column and normalize their order.
-    const allCardsInTargetColumn = await Card.find({
-      columnId: targetColumnId,
-    }).sort({ order: 1 });
-
-    // Rebuild order as 0, 1, 2, 3... (clean consecutive integers)
-    const bulkOps = allCardsInTargetColumn.map((c, index) => ({
-      updateOne: {
-        filter: { _id: c._id },
-        update: { $set: { order: index } },
-      },
-    }));
-
-    if (bulkOps.length > 0) {
-      await Card.bulkWrite(bulkOps);
+      card.order = newOrder;
+      await card.save();
     }
 
-    // Return the updated card with its final normalized order
-    const updatedCard = await Card.findById(cardId);
+    // CASE 2: Dragging into a DIFFERENT column
+    else {
+      // 1. Close the gap left behind in the old source column
+      await Card.updateMany(
+        { columnId: sourceColumnId, order: { $gt: currentOrder } },
+        { $inc: { order: -1 } },
+      );
+
+      // 2. Open up a slot at the target index in the destination column
+      await Card.updateMany(
+        { columnId: destinationColumnId, order: { $gte: newOrder } },
+        { $inc: { order: 1 } },
+      );
+
+      // 3. Save the moving card into its new destination slot
+      card.columnId = targetColumnId;
+      card.order = newOrder;
+      await card.save();
+    }
 
     // SOCKET EMIT
 
     const io = req.app.get("io");
     io.to(card.boardId.toString()).emit("card:moved", {
-      cardId: updatedCard._id,
-      sourceColumnId, // remove from here
-      targetColumnId, // add to here
-      card: updatedCard, // full card with new order value
+      cardId: card._id,
+      sourceColumnId,
+      targetColumnId,
+      card,
     });
 
-    res.status(200).json({ success: true, data: updatedCard });
+    res.status(200).json({ success: true, data: card });
   } catch (error) {
     if (error.name === "CastError") {
       return res

@@ -8,6 +8,7 @@ import boardService from "../services/boardService";
 import KanbanBoard from "../components/board/KanbanBoard";
 import Spinner from "../components/ui/Spinner";
 import useSocket from "../hooks/useSocket";
+import { arrayMove } from "@dnd-kit/sortable";
 
 // Normalizes all _id fields in the board data to plain strings.
 // MongoDB ObjectIds serialize inconsistently — this ensures every
@@ -58,14 +59,22 @@ const BoardPage = () => {
   // STATE UPDATE HANDLERS
 
   const handleColumnAdded = (newColumn) => {
-    setColumns((prev) => [
-      ...prev,
-      {
-        ...newColumn,
-        _id: newColumn._id.toString(),
-        cards: [],
-      },
-    ]);
+    setColumns((prev) => {
+      // Check if the column was already added by a swift socket event
+      const alreadyExists = prev.some(
+        (col) => col._id === newColumn._id.toString(),
+      );
+      if (alreadyExists) return prev;
+
+      return [
+        ...prev,
+        {
+          ...newColumn,
+          _id: newColumn._id.toString(),
+          cards: [],
+        },
+      ];
+    });
   };
 
   const handleCardCreated = (columnId, newCard) => {
@@ -127,37 +136,70 @@ const BoardPage = () => {
 
   // Called by KanbanBoard for optimistic update on drag.
   // movedCard already has normalized IDs (built from state in KanbanBoard).
-  const handleCardMoved = (sourceColumnId, targetColumnId, movedCard) => {
+  const handleCardMoved = (
+    sourceColumnId,
+    targetColumnId,
+    movedCard,
+    targetIndex = movedCard.order,
+  ) => {
     setColumns((prev) => {
-      // Same column — reorder in place
+      // Same column — reorder using arrayMove
       if (sourceColumnId.toString() === targetColumnId.toString()) {
         return prev.map((col) => {
           if (col._id !== sourceColumnId.toString()) return col;
 
-          // Remove card from its current position
-          const withoutCard = col.cards.filter((c) => c._id !== movedCard._id);
+          const oldIndex = col.cards.findIndex((c) => c._id === movedCard._id);
 
-          // Insert at new order position
-          withoutCard.splice(movedCard.order, 0, movedCard);
+          // Fallback to movedCard.order if targetIndex is somehow undefined
+          const finalIndex =
+            targetIndex !== undefined ? targetIndex : movedCard.order;
+          const newCards = arrayMove(col.cards, oldIndex, finalIndex);
 
-          return { ...col, cards: withoutCard };
+          const updatedCards = newCards.map((card, index) => ({
+            ...card,
+            order: index,
+          }));
+
+          return { ...col, cards: updatedCards };
         });
       }
 
       // Different columns — remove from source, add to target
       return prev.map((col) => {
+        // 1. Remove the card from the source column
         if (col._id === sourceColumnId.toString()) {
+          const updatedSourceCards = col.cards.filter(
+            (c) => c._id !== movedCard._id,
+          );
           return {
             ...col,
-            cards: col.cards.filter((c) => c._id !== movedCard._id),
+            cards: updatedSourceCards.map((card, index) => ({
+              ...card,
+              order: index,
+            })),
           };
         }
+
+        // 2. Insert the card at the exact targetIndex in the destination column
         if (col._id === targetColumnId.toString()) {
+          const updatedTargetCards = [...col.cards];
+
+          // Construct the card with its temporary target column ID
+          const cleanMovedCard = { ...movedCard, columnId: targetColumnId };
+
+          // Splice it directly into the targeted position slot
+          updatedTargetCards.splice(targetIndex, 0, cleanMovedCard);
+
+          // Normalize the order indexes for the entire target column
           return {
             ...col,
-            cards: [...col.cards, movedCard].sort((a, b) => a.order - b.order),
+            cards: updatedTargetCards.map((card, index) => ({
+              ...card,
+              order: index,
+            })),
           };
         }
+
         return col;
       });
     });
@@ -230,6 +272,7 @@ const BoardPage = () => {
         return prev.map((col) => {
           if (col._id === sourceColumnId.toString()) {
             return {
+              ...col,
               ...col,
               cards: col.cards.filter((c) => c._id !== card._id.toString()),
             };
