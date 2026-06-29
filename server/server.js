@@ -3,6 +3,7 @@ require("dotenv").config();
 const http = require("http"); // Nodes built-in HTTP module
 const app = require("./app"); // configured Express application
 const connectDB = require("./config/db"); // Database connection function
+const initSocket = require("./socket");
 
 // Read the port from environment variables
 // If PORT is not set fallback to 5000 as default
@@ -16,11 +17,15 @@ const startServer = async () => {
   try {
     await connectDB();
 
+    // Attach Socket.io AFTER DB connects, BEFORE server.listen.
+    initSocket(server, app);
+
     server.listen(PORT, () => {
       console.log("  CollaborativeFlow AI Server");
       console.log(`  Environment : ${process.env.NODE_ENV}`);
       console.log(`  Port        : ${PORT}`);
       console.log("  Status      : Running");
+      console.log("  Socket.io   : Enabled");
     });
   } catch (error) {
     console.error("Server startup failed:", error.message);
