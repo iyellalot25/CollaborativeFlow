@@ -24,6 +24,9 @@ const BoardPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  //connection states
+  const [connectionStatus, setConnectionStatus] = useState("connecting");
+
   // SOCKET CONNECTION
   // useSocket connects to the server, joins the board room and returns
   // the socket instance. We pass boardId so it knows which room to join.
@@ -153,6 +156,17 @@ const BoardPage = () => {
     // We wait until socket is available before registering listeners.
     if (!socket) return;
 
+    // Connection Status Handlers
+    const handleConnect = () => setConnectionStatus("connected");
+    const handleDisconnect = () => setConnectionStatus("reconnecting");
+
+    // Sync current status if socket is already active/inactive when effect runs
+    if (socket.connected) {
+      setConnectionStatus("connected");
+    } else {
+      setConnectionStatus("connecting");
+    }
+
     // card:created
     // Fired by the server when ANY user adds a card to this board.
     // Payload: { columnId, card }
@@ -216,6 +230,8 @@ const BoardPage = () => {
     };
 
     // Register all listeners
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
     socket.on("card:created", handleCardCreatedEvent);
     socket.on("card:updated", handleCardUpdatedEvent);
     socket.on("card:deleted", handleCardDeletedEvent);
@@ -226,6 +242,8 @@ const BoardPage = () => {
     // When this useEffect re-runs (if socket changes) or when
     // the component unmounts, we remove these specific listeners.
     return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
       socket.off("card:created", handleCardCreatedEvent);
       socket.off("card:updated", handleCardUpdatedEvent);
       socket.off("card:deleted", handleCardDeletedEvent);
@@ -287,10 +305,22 @@ const BoardPage = () => {
           </p>
         )}
 
-        {/* Shows users at a glance that this board is connected to real-time sync */}
+        {/* Dynamic real-time connection status indicator */}
         <div className="ml-auto flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-500" />
-          <span className="text-xs text-gray-400">Live</span>
+          <div
+            className={`w-2 h-2 rounded-full transition-colors duration-300 ${
+              connectionStatus === "connected"
+                ? "bg-green-500"
+                : connectionStatus === "reconnecting"
+                  ? "bg-red-500"
+                  : "bg-gray-400"
+            }`}
+          />
+          <span className="text-xs text-gray-500 font-medium">
+            {connectionStatus === "connected" && "Live"}
+            {connectionStatus === "reconnecting" && "Reconnecting..."}
+            {connectionStatus === "connecting" && "Connecting..."}
+          </span>
         </div>
       </nav>
 
