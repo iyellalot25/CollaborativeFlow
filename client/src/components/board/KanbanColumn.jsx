@@ -6,29 +6,24 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { useDroppable } from "@dnd-kit/core";
 import cardService from "../../services/cardService";
 import KanbanCard from "./KanbanCard";
 import Input from "../ui/Input";
 import Button from "../ui/Button";
 import Spinner from "../ui/Spinner";
 
-// Props:
-//   column   — { _id, title, order, cards: [] }
-//   boardId  — needed for the createCard API call
-//   onCardCreated — callback: (columnId, newCard) => void
-//   onCardDeleted — callback: (columnId, cardId) => void
 const KanbanColumn = ({ column, boardId, onCardCreated, onCardDeleted }) => {
-  // Controls whether the inline "add card" form is visible
   const [showAddCard, setShowAddCard] = useState(false);
-
-  // The new card title — controlled input
   const [newCardTitle, setNewCardTitle] = useState("");
-
-  // Validation error for the card title
   const [titleError, setTitleError] = useState("");
-
-  // Whether a card creation request is in flight
   const [isAdding, setIsAdding] = useState(false);
+
+  // useDroppable makes the entire column a valid drop target.
+  // This is critical for two reasons:
+  // 1. Empty columns have no cards so SortableContext alone has no drop surface
+  // 2. When dragging between columns the overlay stays visible
+  const { setNodeRef } = useDroppable({ id: column._id });
 
   const handleAddCard = async () => {
     if (!newCardTitle.trim()) {
@@ -44,11 +39,7 @@ const KanbanColumn = ({ column, boardId, onCardCreated, onCardDeleted }) => {
         column._id,
         newCardTitle.trim(),
       );
-
-      // Tell the parent (KanbanBoard => BoardPage) about the new card.
       onCardCreated(column._id, response.data);
-
-      // Reset form for the next card
       setNewCardTitle("");
     } catch (err) {
       setTitleError(err.message);
@@ -64,26 +55,24 @@ const KanbanColumn = ({ column, boardId, onCardCreated, onCardDeleted }) => {
   };
 
   const handleCardDeleted = (cardId) => {
-    // Bubble the deletion up to the parent so the board state is updated
     onCardDeleted(column._id, cardId);
   };
 
-  // Build the array of card IDs for SortableContext.
   const cardIds = column.cards.map((card) => card._id);
 
   return (
-    // flex-shrink-0 prevents the column from compressing when the board is full
     <div className="flex-shrink-0 w-72 bg-gray-100 rounded-xl p-3">
-      {/* Column Header */}
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-700">{column.title}</h3>
-        {/* Card count badge */}
         <span className="text-xs text-gray-400">{column.cards.length}</span>
       </div>
 
-      {/* Cards List — SortableContext makes every card draggable */}
+      {/* setNodeRef on the card list div registers the whole column
+          area as a droppable surface — including when it is empty.
+          min-h-[2px] ensures there is always a drop surface even
+          when there are no cards. */}
       <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
-        <div className="flex flex-col gap-2">
+        <div ref={setNodeRef} className="flex flex-col gap-2 min-h-[2px]">
           {column.cards.map((card) => (
             <KanbanCard
               key={card._id}
@@ -94,7 +83,6 @@ const KanbanColumn = ({ column, boardId, onCardCreated, onCardDeleted }) => {
         </div>
       </SortableContext>
 
-      {/* Add Card Form — shown inline when showAddCard is true */}
       {showAddCard ? (
         <div className="mt-2 flex flex-col gap-2">
           <Input
@@ -133,7 +121,6 @@ const KanbanColumn = ({ column, boardId, onCardCreated, onCardDeleted }) => {
           </div>
         </div>
       ) : (
-        // "Add card" trigger button — always shown at the bottom of the column
         <button
           onClick={() => setShowAddCard(true)}
           className="w-full mt-2 p-2 text-sm text-gray-500 hover:bg-gray-200 rounded-lg text-left transition-colors"
