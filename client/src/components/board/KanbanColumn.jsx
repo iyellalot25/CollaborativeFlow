@@ -81,16 +81,7 @@ const KanbanColumn = ({ column, boardId, onCardCreated, onCardDeleted }) => {
         <span className="text-xs text-gray-400">{column.cards.length}</span>
       </div>
 
-      {/* Cards List */}
-      <div className="flex flex-col gap-2">
-        {column.cards.map((card) => (
-          <KanbanCard key={card._id} card={card} onDelete={handleCardDeleted} />
-        ))}
-      </div>
-
-      {/*
-        SortableContext wraps the list of draggable cards.
-      */}
+      {/* Cards List — SortableContext makes every card draggable */}
       <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
         <div className="flex flex-col gap-2">
           {column.cards.map((card) => (

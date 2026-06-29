@@ -62,7 +62,9 @@ const KanbanBoard = ({
   // HELPERS — find which column a card belongs to
 
   const findColumnByCardId = (cardId) => {
-    return columns.find((col) => col.cards.some((card) => card._id === cardId));
+    return columns.find((col) =>
+      col.cards.some((card) => card._id.toString() === cardId.toString()),
+    );
   };
 
   // DRAG HANDLERS
@@ -74,7 +76,9 @@ const KanbanBoard = ({
     const sourceColumn = findColumnByCardId(active.id);
     if (!sourceColumn) return;
 
-    const card = sourceColumn.cards.find((c) => c._id === active.id);
+    const card = sourceColumn.cards.find(
+      (c) => c._id.toString() === active.id.toString(),
+    );
     setActiveCard(card);
   };
 
@@ -104,14 +108,19 @@ const KanbanBoard = ({
     // If overId didn't match any card, check if it matches a column directly.
     // This handles the "empty column" drop case.
     if (!targetColumn) {
-      targetColumn = columns.find((col) => col._id === overId);
+      targetColumn = columns.find(
+        (col) => col._id.toString() === overId.toString(),
+      );
     }
 
     // Still no target — invalid drop, do nothing
     if (!targetColumn) return;
 
     // If dropped in the same position in the same column — nothing to do
-    if (sourceColumn._id === targetColumn._id && activeCardId === overId)
+    if (
+      sourceColumn._id.toString() === targetColumn._id.toString() &&
+      activeCardId.toString() === overId.toString()
+    )
       return;
 
     // Determine new order value
@@ -119,7 +128,9 @@ const KanbanBoard = ({
     // then give our card that same index (pushing others down).
     // If dropped on an empty column or at the end, append to the end.
     const targetCards = targetColumn.cards;
-    const overCardIndex = targetCards.findIndex((c) => c._id === overId);
+    const overCardIndex = targetCards.findIndex(
+      (c) => c._id.toString() === overId.toString(),
+    );
 
     // If we found a card to drop onto, use its index as position.
     // Otherwise (dropped on empty column or column header area), append at end.
@@ -129,7 +140,7 @@ const KanbanBoard = ({
     // Update the columns state immediately so the user sees the move
     // happen instantly — before the API call completes.
     const movedCard = {
-      ...sourceColumn.cards.find((c) => c._id === activeCardId),
+      ...sourceColumn.cards.find((c) => c._id === activeCardId.toString()),
       columnId: targetColumn._id,
       order: newOrder,
     };
