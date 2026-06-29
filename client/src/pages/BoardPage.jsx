@@ -128,8 +128,24 @@ const BoardPage = () => {
   // Called by KanbanBoard for optimistic update on drag.
   // movedCard already has normalized IDs (built from state in KanbanBoard).
   const handleCardMoved = (sourceColumnId, targetColumnId, movedCard) => {
-    setColumns((prev) =>
-      prev.map((col) => {
+    setColumns((prev) => {
+      // Same column — reorder in place
+      if (sourceColumnId.toString() === targetColumnId.toString()) {
+        return prev.map((col) => {
+          if (col._id !== sourceColumnId.toString()) return col;
+
+          // Remove card from its current position
+          const withoutCard = col.cards.filter((c) => c._id !== movedCard._id);
+
+          // Insert at new order position
+          withoutCard.splice(movedCard.order, 0, movedCard);
+
+          return { ...col, cards: withoutCard };
+        });
+      }
+
+      // Different columns — remove from source, add to target
+      return prev.map((col) => {
         if (col._id === sourceColumnId.toString()) {
           return {
             ...col,
@@ -143,8 +159,8 @@ const BoardPage = () => {
           };
         }
         return col;
-      }),
-    );
+      });
+    });
   };
 
   // SOCKET EVENT LISTENERS
