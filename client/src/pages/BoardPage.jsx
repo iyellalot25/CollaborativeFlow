@@ -332,6 +332,7 @@ const BoardPage = () => {
           onColumnAdded={handleColumnAdded}
           onCardCreated={handleCardCreated}
           onCardDeleted={handleCardDeleted}
+          onCardMoved={handleCardMoved}
         />
       </main>
     </div>

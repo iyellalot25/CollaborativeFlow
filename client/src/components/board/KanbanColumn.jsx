@@ -2,6 +2,10 @@
 // Renders its cards, handles adding new cards inline.
 
 import { useState } from "react";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import cardService from "../../services/cardService";
 import KanbanCard from "./KanbanCard";
 import Input from "../ui/Input";
@@ -64,6 +68,9 @@ const KanbanColumn = ({ column, boardId, onCardCreated, onCardDeleted }) => {
     onCardDeleted(column._id, cardId);
   };
 
+  // Build the array of card IDs for SortableContext.
+  const cardIds = column.cards.map((card) => card._id);
+
   return (
     // flex-shrink-0 prevents the column from compressing when the board is full
     <div className="flex-shrink-0 w-72 bg-gray-100 rounded-xl p-3">
@@ -80,6 +87,21 @@ const KanbanColumn = ({ column, boardId, onCardCreated, onCardDeleted }) => {
           <KanbanCard key={card._id} card={card} onDelete={handleCardDeleted} />
         ))}
       </div>
+
+      {/*
+        SortableContext wraps the list of draggable cards.
+      */}
+      <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
+        <div className="flex flex-col gap-2">
+          {column.cards.map((card) => (
+            <KanbanCard
+              key={card._id}
+              card={card}
+              onDelete={handleCardDeleted}
+            />
+          ))}
+        </div>
+      </SortableContext>
 
       {/* Add Card Form — shown inline when showAddCard is true */}
       {showAddCard ? (
