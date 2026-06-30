@@ -289,9 +289,3 @@ npm run dev
 - Public Board Sharing
 
 ---
-
-## 👨‍💻 Author
-
-**Srijan Ghosh**
-
-Computer Science student passionate about building scalable full-stack applications with modern web technologies.
