@@ -93,6 +93,19 @@ Built using **Dnd Kit**
 
 ---
 
+## 🏛️ Architecture Highlights
+
+The application follows a modular, layered architecture designed for scalability and maintainability.
+
+- **Layered Backend Architecture** – Clear separation of routes, controllers, models, and socket management for improved code organization and maintainability.
+- **REST + WebSockets** – Express handles persistent CRUD operations while Socket.io provides low-latency, real-time synchronization between connected clients.
+- **Board-Based Socket Rooms** – Each Kanban board has its own Socket.io room, ensuring events are only broadcast to users collaborating on the same board.
+- **Database as the Source of Truth** – All changes are persisted to MongoDB before being broadcast, ensuring consistency across clients.
+- **Optimistic UI Updates** – Drag-and-drop interactions update the interface immediately while persisting changes asynchronously for a smooth user experience.
+- **Extensible Foundation** – The project structure is designed to support future features such as AI-powered insights, GitHub issue import, scheduled background jobs, and browser extensions without major architectural changes.
+
+---
+
 ## 📂 Project Structure
 
 ```text
@@ -144,7 +157,7 @@ collaborativeflow-ai/
 
 ---
 
-## ⚙️ Real-Time Architecture
+## 🔄 Real-Time Collaboration Architecture
 
 The application uses **Socket.io Rooms** to isolate board-specific collaboration.
 
