@@ -263,32 +263,51 @@ const BoardPage = () => {
         );
         if (!targetCol) return prev;
 
-        const alreadyInTarget = targetCol.cards.some(
+        // Check if we already have this exact card at this exact order
+        // in the target column. This correctly handles same-column moves:
+        // if the order differs, we haven't applied this update yet.
+        const existingCard = targetCol.cards.find(
           (c) => c._id === card._id.toString(),
         );
-        if (alreadyInTarget) return prev;
+        const alreadyApplied =
+          existingCard && existingCard.order === card.order;
+        if (alreadyApplied) return prev;
 
-        // Remote move from another user — apply it
+        const normalizedCard = {
+          ...card,
+          _id: card._id.toString(),
+          columnId: card.columnId.toString(),
+          boardId: card.boardId.toString(),
+        };
+
+        // Same column — reorder in place
+        if (sourceColumnId.toString() === targetColumnId.toString()) {
+          return prev.map((col) => {
+            if (col._id !== sourceColumnId.toString()) return col;
+
+            const withoutCard = col.cards.filter(
+              (c) => c._id !== normalizedCard._id,
+            );
+            withoutCard.splice(normalizedCard.order, 0, normalizedCard);
+
+            return { ...col, cards: withoutCard };
+          });
+        }
+
+        // Different columns — remove from source, add to target
         return prev.map((col) => {
           if (col._id === sourceColumnId.toString()) {
             return {
               ...col,
-              ...col,
-              cards: col.cards.filter((c) => c._id !== card._id.toString()),
+              cards: col.cards.filter((c) => c._id !== normalizedCard._id),
             };
           }
           if (col._id === targetColumnId.toString()) {
             return {
               ...col,
-              cards: [
-                ...col.cards,
-                {
-                  ...card,
-                  _id: card._id.toString(),
-                  columnId: card.columnId.toString(),
-                  boardId: card.boardId.toString(),
-                },
-              ].sort((a, b) => a.order - b.order),
+              cards: [...col.cards, normalizedCard].sort(
+                (a, b) => a.order - b.order,
+              ),
             };
           }
           return col;
